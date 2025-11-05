@@ -114,18 +114,41 @@ jobs:
         fi
   
     - name: Setup KernelSU
+      if: env.ENABLE_KERNELSU == 'true'
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         
-        echo "Force removing placeholder directory..."
-        rm -rf drivers/kernelsu  # <--- 在这里添加这行
+        echo "Forcibly removing kernelsu placeholder directory..."
+        rm -rf drivers/kernelsu
         
-        echo "Running KernelSU setup script..."
-        curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -
+        echo "Manually cloning and checking out KernelSU v0.9.5..."
+        git clone https://github.com/tiann/KernelSU
+        cd KernelSU
         
-        echo "Verifying symlink..."
-        ls -la drivers/kernelsu  # <--- 添加这行用于调试
+        echo "Checking out tag: ${{ env.KERNELSU_TAG }}"
+        git checkout ${{ env.KERNELSU_TAG }}
         
+        # 检查 KERNELSU_TAG 是否 checkout 成功
+        if [ $? -ne 0 ]; then
+          echo "::error:: Failed to checkout KernelSU tag ${{ env.KERNELSU_TAG }}. This tag may no longer exist or be compatible."
+          exit 1
+        fi
+        
+        echo "Verifying checked out version:"
+        git status
+        
+        cd .. # 返回 android-kernel 根目录
+        
+        # 手动执行 setup.sh 的核心逻辑
+        echo "Creating symlink..."
+        ln -sf "$(realpath --relative-to="drivers" "KernelSU/kernel")" "drivers/kernelsu"
+        
+        echo "Patching Makefile..."
+        grep -q "kernelsu" "drivers/Makefile" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "drivers/Makefile"
+        
+        echo "Patching Kconfig..."
+        grep -q "source \"drivers/kernelsu/Kconfig\"" "drivers/Kconfig" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "drivers/Kconfig"
+
         echo "UPLOADNAME=-KernelSU" >> $GITHUB_ENV
 
     - name: Setup Configuration for Kernel
