@@ -117,7 +117,16 @@ jobs:
       if: env.ENABLE_KERNELSU == 'true'
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        
+        echo "Force removing placeholder directory..."
+        rm -rf drivers/kernelsu  # <--- 在这里添加这行
+        
+        echo "Running KernelSU setup script..."
         curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s ${{ env.KERNELSU_TAG }}
+        
+        echo "Verifying symlink..."
+        ls -la drivers/kernelsu  # <--- 添加这行用于调试
+        
         echo "UPLOADNAME=-KernelSU" >> $GITHUB_ENV
 
     - name: Setup Configuration for Kernel
