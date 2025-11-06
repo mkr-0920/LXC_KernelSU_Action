@@ -124,31 +124,35 @@ jobs:
         echo "Forcibly removing any old KernelSU clone..."
         rm -rf KernelSU
         
-        echo "Cloning *ONLY* the specified tag: ${{ env.KERNELSU_TAG }}"
-        # [!!] 这是关键修改：使用 --depth 1 --branch [TAG] 来强制克隆 v0.9.5
-        git clone --depth 1 --branch ${{ env.KERNELSU_TAG }} https://github.com/tiann/KernelSU
+        echo "Downloading KernelSU v0.9.5 source tarball..."
+        # [!!] 使用您提供的 .tar.gz 链接
+        wget -O kernelsu.tar.gz https://github.com/tiann/KernelSU/archive/refs/tags/v0.9.5.tar.gz
         
-        # 严格检查 KernelSU 目录是否存在
-        if [ ! -d "KernelSU" ]; then
-          echo "::error:: Failed to clone KernelSU repository with tag ${{ env.KERNELSU_TAG }}. Please check tag name."
+        if [ ! -f "kernelsu.tar.gz" ]; then
+          echo "::error:: Failed to download KernelSU v0.9.5 tarball."
           exit 1
         fi
         
-        echo "Verifying checked out version (directory content):"
-        ls -la KernelSU
+        echo "Extracting tarball..."
+        mkdir KernelSU
+        # [!!] 解压并使用 --strip-components=1 来移除顶层目录 (例如 KernelSU-0.9.5/)
+        tar -xzf kernelsu.tar.gz -C KernelSU --strip-components=1
+        
+        # 检查解压后的 kernel 目录是否存在
+        if [ ! -d "KernelSU/kernel" ]; then
+          echo "::error:: Failed to extract tarball correctly. 'KernelSU/kernel' directory not found."
+          exit 1
+        fi
+        
+        echo "Cleaning up tarball..."
+        rm kernelsu.tar.gz
         
         # 手动执行 setup.sh 的核心逻辑 (链接和修改 Kconfig/Makefile)
         echo "Creating symlink..."
         ln -sf "$(realpath --relative-to="drivers" "KernelSU/kernel")" "drivers/kernelsu"
         
         echo "Patching Makefile..."
-        grep -q "kernelsu" "drivers/Makefile" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "drivers/Makefile"
-        
-        echo "Patching Kconfig..."
-        # 注意：这里我们假设 Kconfig 中有 "endmenu" 作为锚点
-        grep -q "source \"drivers/kernelsu/Kconfig\"" "drivers/Kconfig" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "drivers/Kconfig"
-
-        echo "UPLOADNAME=-KernelSU" >> $GITHUB_ENV
+        grep -q "kernelsu" "drivers/Makefile" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "drivers/Makefile
 
     - name: Setup Configuration for Kernel
       run: |
