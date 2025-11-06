@@ -121,25 +121,23 @@ jobs:
         echo "Forcibly removing kernelsu placeholder directory..."
         rm -rf drivers/kernelsu
         
-        echo "Manually cloning and checking out KernelSU v0.9.5..."
-        git clone https://github.com/tiann/KernelSU
-        cd KernelSU
+        echo "Forcibly removing any old KernelSU clone..."
+        rm -rf KernelSU
         
-        echo "Checking out tag: ${{ env.KERNELSU_TAG }}"
-        git checkout ${{ env.KERNELSU_TAG }}
+        echo "Cloning *ONLY* the specified tag: ${{ env.KERNELSU_TAG }}"
+        # [!!] 这是关键修改：使用 --depth 1 --branch [TAG] 来强制克隆 v0.9.5
+        git clone --depth 1 --branch ${{ env.KERNELSU_TAG }} https://github.com/tiann/KernelSU
         
-        # 检查 KERNELSU_TAG 是否 checkout 成功
-        if [ $? -ne 0 ]; then
-          echo "::error:: Failed to checkout KernelSU tag ${{ env.KERNELSU_TAG }}. This tag may no longer exist or be compatible."
+        # 严格检查 KernelSU 目录是否存在
+        if [ ! -d "KernelSU" ]; then
+          echo "::error:: Failed to clone KernelSU repository with tag ${{ env.KERNELSU_TAG }}. Please check tag name."
           exit 1
         fi
         
-        echo "Verifying checked out version:"
-        git status
+        echo "Verifying checked out version (directory content):"
+        ls -la KernelSU
         
-        cd .. # 返回 android-kernel 根目录
-        
-        # 手动执行 setup.sh 的核心逻辑
+        # 手动执行 setup.sh 的核心逻辑 (链接和修改 Kconfig/Makefile)
         echo "Creating symlink..."
         ln -sf "$(realpath --relative-to="drivers" "KernelSU/kernel")" "drivers/kernelsu"
         
@@ -147,6 +145,7 @@ jobs:
         grep -q "kernelsu" "drivers/Makefile" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "drivers/Makefile"
         
         echo "Patching Kconfig..."
+        # 注意：这里我们假设 Kconfig 中有 "endmenu" 作为锚点
         grep -q "source \"drivers/kernelsu/Kconfig\"" "drivers/Kconfig" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "drivers/Kconfig"
 
         echo "UPLOADNAME=-KernelSU" >> $GITHUB_ENV
