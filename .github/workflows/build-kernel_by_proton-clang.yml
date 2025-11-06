@@ -125,7 +125,6 @@ jobs:
         rm -rf KernelSU
         
         echo "Downloading KernelSU v0.9.5 source tarball..."
-        # [!!] 使用您提供的 .tar.gz 链接
         wget -O kernelsu.tar.gz https://github.com/tiann/KernelSU/archive/refs/tags/v0.9.5.tar.gz
         
         if [ ! -f "kernelsu.tar.gz" ]; then
@@ -135,10 +134,8 @@ jobs:
         
         echo "Extracting tarball..."
         mkdir KernelSU
-        # [!!] 解压并使用 --strip-components=1 来移除顶层目录 (例如 KernelSU-0.9.5/)
         tar -xzf kernelsu.tar.gz -C KernelSU --strip-components=1
         
-        # 检查解压后的 kernel 目录是否存在
         if [ ! -d "KernelSU/kernel" ]; then
           echo "::error:: Failed to extract tarball correctly. 'KernelSU/kernel' directory not found."
           exit 1
@@ -152,7 +149,14 @@ jobs:
         ln -sf "$(realpath --relative-to="drivers" "KernelSU/kernel")" "drivers/kernelsu"
         
         echo "Patching Makefile..."
-        grep -q "kernelsu" "drivers/Makefile" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "drivers/Makefile
+        # [!!] 已修改: 为 printf 和 grep 使用单引号以提高稳定性
+        grep -q 'kernelsu' "drivers/Makefile" || printf '\nobj-$(CONFIG_KSU) += kernelsu/\n' >> "drivers/Makefile"
+        
+        echo "Patching Kconfig..."
+        # [!!] 已修改: 为 grep 和 sed 使用单引号来修复 EOF 错误
+        grep -q 'source "drivers/kernelsu/Kconfig"' "drivers/Kconfig" || sed -i '/endmenu/i\source "drivers/kernelsu/Kconfig"' "drivers/Kconfig"
+
+        echo "UPLOADNAME=-KernelSU" >> $GITHUB_ENV
 
     - name: Setup Configuration for Kernel
       run: |
