@@ -159,27 +159,38 @@ jobs:
         echo "UPLOADNAME=-KernelSU" >> $GITHUB_ENV
 
     - name: Setup Configuration for Kernel
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        sed -i "s/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/g" arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-        if [ ${{ env.ADD_KPROBES_CONFIG }} = true ]; then
-            echo "CONFIG_MODULES=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-            echo "CONFIG_KPROBES=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-            echo "CONFIG_HAVE_KPROBES=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-            echo "CONFIG_KPROBE_EVENTS=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-        fi
-        if [ ${{ env.ADD_OVERLAYFS_CONFIG }} = true ]; then
-            echo "CONFIG_OVERLAY_FS=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-        fi
-        if [ ${{ env.DISABLE-LTO }} = true ]; then
-            sed -i 's/CONFIG_LTO=y/CONFIG_LTO=n/' arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-            sed -i 's/CONFIG_LTO_CLANG=y/CONFIG_LTO_CLANG=n/' arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-            sed -i 's/CONFIG_THINLTO=y/CONFIG_THINLTO=n/' arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-            echo "CONFIG_LTO_NONE=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-        fi
-        if [ ${{ env.DISABLE_CC_WERROR }} = true ]; then
-            echo "CONFIG_CC_WERROR=n" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
-        fi
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        sed -i "s/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/g" arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        if [ ${{ env.ADD_KPROBES_CONFIG }} = true ]; then
+            echo "CONFIG_MODULES=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+            echo "CONFIG_KPROBES=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+            echo "CONFIG_HAVE_KPROBES=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+            echo "CONFIG_KPROBE_EVENTS=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        fi
+        if [ ${{ env.ADD_OVERLAYFS_CONFIG }} = true ]; then
+            echo "CONFIG_OVERLAY_FS=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        fi
+        
+        # --- [新增] 强制 Gzip 和 DTB ---
+        echo "Forcing Image.gz-dtb configuration..."
+        # 1. 禁用未压缩 (这是您之前遇到的问题)
+        sed -i 's/CONFIG_BUILD_ARM64_UNCOMPRESSED_KERNEL=y/CONFIG_BUILD_ARM64_UNCOMPRESSED_KERNEL=n/' arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        sed -i 's/CONFIG_KERNEL_UNCOMPRESSED=y/CONFIG_KERNEL_UNCOMPRESSED=n/' arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        
+        # 2. 启用 Gzip (如果不存在则添加，如果为n则修改为y)
+        if ! grep -q "CONFIG_KERNEL_GZIP" arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}; then
+            echo "CONFIG_KERNEL_GZIP=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        else
+            sed -i 's/CONFIG_KERNEL_GZIP=n/CONFIG_KERNEL_GZIP=y/' arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        fi
+        
+        # 3. 确保 Append DTB 被启用
+        if ! grep -q "CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE" arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}; then
+            echo "CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        else
+            sed -i 's/CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE=n/CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE=y/' arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
+        fi
         
     - name: Setup LXC
       if: env.ENABLE_LXC == 'true'
